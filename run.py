@@ -25,7 +25,7 @@ class CrawlResponse(BaseModel):
     success: bool
     url: str
     title: str | None
-    markdown: str
+    # markdown: str
     cleaned_markdown: str
     # cleaned_html: str
 
@@ -107,7 +107,7 @@ async def crawl(request: CrawlRequest):
             success=result.success,
             url=result.url,
             title=result.metadata.get("title") if result.metadata else None,
-            markdown=result.markdown,
+            # markdown=result.markdown,
             cleaned_markdown=result.markdown.fit_markdown
         )
 
