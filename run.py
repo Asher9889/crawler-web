@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, HttpUrl
 
-from crawl4ai import AsyncWebCrawler, CrawlerRunConfig, PruningContentFilter
+from crawl4ai import AsyncWebCrawler, CrawlerRunConfig
+from crawl4ai.content_filter_strategy import BM25ContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 
@@ -19,6 +20,7 @@ load_dotenv()
 
 class CrawlRequest(BaseModel):
     url: HttpUrl
+    query: str
 
 
 class CrawlResponse(BaseModel):
@@ -95,20 +97,25 @@ async def crawl(request: CrawlRequest):
     try:
         config = CrawlerRunConfig(
             markdown_generator=DefaultMarkdownGenerator(
-                content_filter=PruningContentFilter()
+                content_filter=BM25ContentFilter(
+                    user_query=request.query,
+                    bm25_threshold=1.0,
+                ),
             ),
         )
+
         result = await crawler.arun(
             url=str(request.url),
             config=config
         )
 
+        fit_markdown = result.markdown.fit_markdown or result.markdown.raw_markdown
+
         return CrawlResponse(
             success=result.success,
             url=result.url,
             title=result.metadata.get("title") if result.metadata else None,
-            # markdown=result.markdown,
-            cleanedMarkdown=result.markdown.fit_markdown
+            cleanedMarkdown=fit_markdown
         )
 
     except Exception as ex:
