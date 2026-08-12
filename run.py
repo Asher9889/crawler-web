@@ -29,15 +29,12 @@ load_dotenv()
 # data. A compact shape-example tells the model the exact structure to return.
 
 KNOWLEDGE_SCHEMA = {
-    "concepts": [{"title": "string", "content": "string"}],
-    "formulas": ["string"],
-    "complexity": [
-        {"case": "string", "complexity": "string", "explanation": "string"}
-    ],
-    "algorithms": [{"title": "string", "description": "string"}],
-    "examples": [{"description": "string", "result": "string"}],
-    "code_examples": [{"language": "string", "code": "string"}],
-    "questions": ["string"],
+    "knowledge": [
+        {
+            "topic": "string",
+            "content": "string"
+        }
+    ]
 }
 
 
@@ -49,17 +46,16 @@ def build_extraction_instruction(query: str) -> str:
         Rules:
         - Use only information explicitly supported by the provided content.
         - Do not invent, infer, correct, or supplement information using outside knowledge.
-        - correct anything in the source content when it is clearly wrong.
-        - Preserve relevant concepts, formulas, complexity analysis, algorithms, examples,
-        code examples, and existing topic-specific questions.
-        - Preserve existing questions as separate items when their boundaries are clear.
-        - If the source contains an incomplete question or fragment, remove that.
-        - Treat existing questions as knowledge and preserve them when relevant.
-        - Keep each existing question as a separate item. Never merge adjacent questions.
+        - Do not create knowledge items merely describing the presence of code.
+        - Do not generate absent-information items
+        - Ignore source code unless the requested topic specifically requires programming implementation details.
+        - Preserve relevant concepts, formulas, complexity analysis, algorithms or which are useful to generate questions.
+        - Do not include questions, quiz items, or question sentences in knowledge.
+        - Only include examples that contain actual educational information useful for understanding or assessing the requested topic. 
+        - Do not describe the existence of code examples.
+        
         - Ignore navigation, advertisements, authentication messages, social links,
         copyright/footer content, and unrelated website content.
-        - Do not generate new questions.
-        - Do not answer existing questions.
         """
         # "Extract factual educational information from the provided content that is "
         # "relevant to the requested topic.\n\n"
@@ -94,32 +90,90 @@ def build_extraction_instruction(query: str) -> str:
 # (<blocks>, <url_content>, <score>), which a 4B model fails to follow and instead
 # echoes the scaffolding as JSON keys. Replace them with a short, schema-first prompt
 # that uses the exact placeholders crawl4ai substitutes: {URL}, {HTML}, {REQUEST}, {SCHEMA}.
-KNOWLEDGE_EXTRACTION_PROMPT = """Extract factual educational knowledge from the source content.
+
+KNOWLEDGE_EXTRACTION_PROMPT = """
+Extract source-grounded educational knowledge from the provided content.
 
 SOURCE URL:
 {URL}
 
 SOURCE CONTENT:
-<content>
 {HTML}
-</content>
 
 USER REQUEST:
 {REQUEST}
 
-RESULT STRUCTURE - return ONE JSON object with the SAME keys shown below. Fill each array with actual data extracted from the source. Use empty array [] for keys with no data. Do NOT return this template itself:
+RESULT STRUCTURE:
 {SCHEMA}
 
 RULES:
-- Extract only information present in the source content.
-- Do not invent, infer beyond the source, or use outside knowledge.
-- Do not correct source information.
-- Do not answer questions and do not generate new questions.
-- Preserve existing topic-related questions from the source in the "questions" field as source material.
-- Include malformed code in "code_examples" only if it is sufficiently understandable; otherwise omit it.
-- Ignore navigation, advertisements, social links, website metadata, copyrights, author/company information, and unrelated content.
 
-Return ONLY the JSON object. No comments, markdown fences, XML tags, or explanations."""
+1. Extract ONLY information explicitly present in SOURCE CONTENT.
+
+2. Every factual statement in the output must be directly supported by
+   the SOURCE CONTENT.
+
+3. DO NOT use your own knowledge to complete, correct, infer, calculate,
+   interpret, or supplement information.
+
+4. If the source says "Best Case" and "Worst Case" but does not mention
+   "Average Case", DO NOT add an Average Case.
+
+5. Do not derive new facts from formulas, examples, or statements.
+   Preserve the information as stated by the source.
+
+6. Do not correct factual mistakes in the source.
+
+7. Do not generate new examples, explanations, formulas, questions,
+   algorithms, or conclusions.
+
+8. You may combine closely related statements from the source into one
+   knowledge item, but every part of the resulting statement must be
+   supported by the source.
+
+9. If information is incomplete in the source, keep it incomplete.
+   Do not fill the missing information.
+
+10. Preserve important source terminology, formulas, examples, rules,
+    procedures, and topic-specific questions.
+
+11. Ignore navigation, advertisements, authentication messages,
+    social links, copyright/footer content, author/company information,
+    and unrelated website content.
+
+12. Existing questions in the source must be preserved as questions.
+    Do not answer them.
+
+13. Do not generate new questions.
+
+14. Return ONLY the JSON object.
+    Do not return markdown, XML, explanations, comments, or code fences.
+
+{SCHEMA}
+"""
+
+# KNOWLEDGE_EXTRACTION_PROMPT = """Extract factual educational knowledge from the source content.
+
+# SOURCE URL:
+# {URL}
+
+# SOURCE CONTENT:
+# <content>
+# {HTML}
+# </content>
+
+# USER REQUEST:
+# {REQUEST}
+
+# RESULT STRUCTURE - return ONE JSON object with the SAME keys shown below. Fill each array with actual data extracted from the source. Use empty array [] for keys with no data. Do NOT return this template itself:
+# {SCHEMA}
+
+# RULES:
+# - Extract only information present in the source content.
+# - Do not answer questions and do not generate new questions.
+# - Ignore navigation, advertisements, social links, website metadata, copyrights, author/company information, and unrelated content.
+
+# Return ONLY the JSON object. No comments, markdown fences, XML tags, or explanations."""
 
 crawl4ai_extraction_strategy.PROMPT_EXTRACT_SCHEMA_WITH_INSTRUCTION = KNOWLEDGE_EXTRACTION_PROMPT
 crawl4ai_extraction_strategy.PROMPT_EXTRACT_INFERRED_SCHEMA = KNOWLEDGE_EXTRACTION_PROMPT
